@@ -1,0 +1,49 @@
+[Unit]
+Description=PetCare Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/opt/petcare-backend
+Environment=DB_HOST=$DB_HOST
+Environment=DB_USER=$DB_USER
+Environment=DB_PASS=$DB_PASS
+Environment=DB_NAME=petcare
+ExecStart=/usr/local/bin/gunicorn -w 2 -b 0.0.0.0:5000 app:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable petcare
+systemctl start petcare
+
+
+# CloudWatch Agent Config to ship logs
+cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/cloud-init-output.log",
+            "log_group_name": "/petcareflow/backend",
+            "log_stream_name": "{instance_id}/cloud-init-output"
+          }
+        ]
+      }
+    }
+  }
+}
+EOF
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+-a fetch-config \
+-m ec2 \
+-c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+-s
